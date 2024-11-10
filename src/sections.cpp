@@ -245,6 +245,39 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
     if (IsExecutableSegment(SectionHeader)) {
         info("cleaning up executable section");
 
+        const auto IsInterrupt = [](const x86_insn &insn) {
+            return ::x86_insn::X86_INS_INT == insn ||
+                   ::x86_insn::X86_INS_INT1 == insn ||
+                   ::x86_insn::X86_INS_INT3 == insn ||
+                   ::x86_insn::X86_INS_INTO == insn;
+        };
+        const auto IsReturn = [](const x86_insn &insn) {
+            return ::x86_insn::X86_INS_RET == insn ||
+                   ::x86_insn::X86_INS_RETF == insn ||
+                   ::x86_insn::X86_INS_RETFQ == insn;
+        };
+        const auto IsJump = [](const x86_insn &insn) {
+            return ::x86_insn::X86_INS_JMP == insn ||
+                   ::x86_insn::X86_INS_JAE == insn ||
+                   ::x86_insn::X86_INS_JA == insn ||
+                   ::x86_insn::X86_INS_JBE == insn ||
+                   ::x86_insn::X86_INS_JB == insn ||
+                   ::x86_insn::X86_INS_JCXZ == insn ||
+                   ::x86_insn::X86_INS_JECXZ == insn ||
+                   ::x86_insn::X86_INS_JE == insn ||
+                   ::x86_insn::X86_INS_JGE == insn ||
+                   ::x86_insn::X86_INS_JG == insn ||
+                   ::x86_insn::X86_INS_JLE == insn ||
+                   ::x86_insn::X86_INS_JL == insn ||
+                   ::x86_insn::X86_INS_JNE == insn ||
+                   ::x86_insn::X86_INS_JNO == insn ||
+                   ::x86_insn::X86_INS_JNP == insn ||
+                   ::x86_insn::X86_INS_JNS == insn ||
+                   ::x86_insn::X86_INS_JO == insn ||
+                   ::x86_insn::X86_INS_JP == insn ||
+                   ::x86_insn::X86_INS_JRCXZ == insn ||
+                   ::x86_insn::X86_INS_JS == insn;
+        };
         const auto insn = cs_malloc(Dumper->capstoneHandle);
         for (const auto &targetPage: dumpedPagesInformation) {
             auto pageSize = static_cast<std::size_t>(PAGE_SIZE);
@@ -264,42 +297,29 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
                  *  traps placed by obfuscation tools or just plain garbage we read from the proc, but bad, lol.
                  */
 
-                const auto isPreviousInstructionNOP = PREVIOUS_INSTRUCTION == ::x86_insn::X86_INS_NOP;
-                const auto isPreviousInstructionINT3 = PREVIOUS_INSTRUCTION == ::x86_insn::X86_INS_INT3;
-                const auto isPreviousInstructionReturnOrCall =
-                        PREVIOUS_INSTRUCTION == ::x86_insn::X86_INS_CALL || PREVIOUS_INSTRUCTION ==
-                        ::x86_insn::X86_INS_RET || PREVIOUS_INSTRUCTION == ::x86_insn::X86_INS_JMP;
+                constexpr auto interrupt = unsigned char{0xCC};
 
-                if (isPreviousInstructionNOP && insn->id == ::x86_insn::X86_INS_INT3) {
+                if ((!IsJump(PREVIOUS_INSTRUCTION) && !IsReturn(PREVIOUS_INSTRUCTION) && !IsInterrupt(
+                         PREVIOUS_INSTRUCTION) && IsInterrupt(
+                         static_cast<::x86_insn>(insn->id)) && memcmp(
+                         reinterpret_cast<void *>(insn->address + insn->size),
+                         &interrupt, 1) != 0)
+                    || PREVIOUS_INSTRUCTION == ::x86_insn::X86_INS_TEST && IsInterrupt(
+                        static_cast<::x86_insn>(insn->id))) {
+                    /*
+                     *  The next instruction is not an interrupt, the previous instruction was not a jump (Which would denote an end in an execution block)
+                     *  - Implementation note:
+                     *      - Hyperion appears to be testing registers for the purposes of possibly making them trip a flag on the CPU?
+                     */
                     info(
-                        "FIXING INT3->>NOP miss-convert in decrypted insn @ %p", startChunk);
-                    *const_cast<std::uint8_t *>(startChunk - insn->size) = 0xCC;
+                        "PATCHED ORPHAN INTERRUPT (POSSIBLY A FAKE INSTRUCTION!) @ %p", startChunk);
 
-                    PREVIOUS_INSTRUCTION = ::x86_insn::X86_INS_INT3;
-                    PREVIOUS_INSTRUCTIONSIZE = insn->size;
-                    continue;
-                }
-
-                if ((isPreviousInstructionINT3 || isPreviousInstructionReturnOrCall) && insn->id ==
-                    ::x86_insn::X86_INS_INT3) {
-                    // Previous is a RET or a CALL, current is INT3, skip.
-                    // Possibly a chain of insns that are INT3 and delimit function end and start, they do not need any replacement.
-                    PREVIOUS_INSTRUCTION = static_cast<::x86_insn>(insn->id);
-                    PREVIOUS_INSTRUCTIONSIZE = insn->size;
-                    continue;
-                }
-
-                if (!isPreviousInstructionReturnOrCall && !isPreviousInstructionINT3 && !isPreviousInstructionNOP &&
-                    insn->id == ::x86_insn::X86_INS_INT3) {
-                    info(
-                        "Replacing INT3 to NOP from decrypted insn @ %p", startChunk);
-                    *const_cast<std::uint8_t *>(startChunk - insn->size) = 0x90;
+                    memset(reinterpret_cast<void *>(insn->address), 0x90, insn->size); // Address is canonical.
 
                     PREVIOUS_INSTRUCTION = ::x86_insn::X86_INS_NOP;
-                    PREVIOUS_INSTRUCTIONSIZE = insn->size;
+                    PREVIOUS_INSTRUCTIONSIZE = 1;
                     continue;
                 }
-
 
                 PREVIOUS_INSTRUCTION = static_cast<::x86_insn>(insn->id);
                 PREVIOUS_INSTRUCTIONSIZE = insn->size;
