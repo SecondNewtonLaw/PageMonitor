@@ -245,6 +245,20 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
     if (IsExecutableSegment(SectionHeader)) {
         info("cleaning up executable section");
 
+        const auto ModifiesProcessorFlags = [](const x86_insn &insn) {
+            return ::x86_insn::X86_INS_TEST == insn ||
+                   ::x86_insn::X86_INS_CMP == insn ||
+                   ::x86_insn::X86_INS_CMPPD == insn ||
+                   ::x86_insn::X86_INS_CMPPS == insn ||
+                   ::x86_insn::X86_INS_CMPSB == insn ||
+                   ::x86_insn::X86_INS_CMPSD == insn ||
+                   ::x86_insn::X86_INS_CMPSQ == insn ||
+                   ::x86_insn::X86_INS_CMPSS == insn ||
+                   ::x86_insn::X86_INS_CMPSW == insn ||
+                   ::x86_insn::X86_INS_CMPXCHG == insn ||
+                   ::x86_insn::X86_INS_CMPXCHG8B == insn ||
+                   ::x86_insn::X86_INS_CMPXCHG16B == insn;
+        };
         const auto IsInterrupt = [](const x86_insn &insn) {
             return ::x86_insn::X86_INS_INT == insn ||
                    ::x86_insn::X86_INS_INT1 == insn ||
@@ -284,7 +298,6 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
             auto startChunk = static_cast<const std::uint8_t *>(targetPage.address);
             auto currentAddress = reinterpret_cast<std::uintptr_t>(targetPage.address);
 
-            auto PREVIOUS_INSTRUCTIONSIZE = 0ll;
             auto PREVIOUS_INSTRUCTION = ::x86_insn::X86_INS_NOP;
 
             while (cs_disasm_iter(Dumper->capstoneHandle, &startChunk, &pageSize,
@@ -304,25 +317,34 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
                          static_cast<::x86_insn>(insn->id)) && memcmp(
                          reinterpret_cast<void *>(insn->address + insn->size),
                          &interrupt, 1) != 0)
-                    || PREVIOUS_INSTRUCTION == ::x86_insn::X86_INS_TEST && IsInterrupt(
+                    || ModifiesProcessorFlags(PREVIOUS_INSTRUCTION) && IsInterrupt(
                         static_cast<::x86_insn>(insn->id))) {
                     /*
                      *  The next instruction is not an interrupt, the previous instruction was not a jump (Which would denote an end in an execution block)
                      *  - Implementation note:
-                     *      - Hyperion appears to be testing registers for the purposes of possibly making them trip a flag on the CPU?
+                     *      - Hyperion appears to be (IN PURPOSE) modifying CPU flags before interrupts, possibly relating to tripping
+                     *        their IC and passing the Interrupt and ignoring it if such is the case that the flag is set?
                      */
                     info(
                         "PATCHED ORPHAN INTERRUPT (POSSIBLY A FAKE INSTRUCTION!) @ %p", startChunk);
 
                     memset(reinterpret_cast<void *>(insn->address), 0x90, insn->size); // Address is canonical.
 
+                    if (ModifiesProcessorFlags(PREVIOUS_INSTRUCTION) && IsInterrupt(
+                            static_cast<::x86_insn>(insn->id))) {
+                        auto addy = insn->address;
+                        while (memcmp(reinterpret_cast<void *>(++addy), &interrupt, 1) == 0) {
+                            info(
+                                "PATCHED FOLLOWING INTERRUPTS THAT WERE MISLEADING ANALYSIS.");
+                            memset(reinterpret_cast<void *>(addy), 0x90, 1);
+                        }
+                    }
+
                     PREVIOUS_INSTRUCTION = ::x86_insn::X86_INS_NOP;
-                    PREVIOUS_INSTRUCTIONSIZE = 1;
                     continue;
                 }
 
                 PREVIOUS_INSTRUCTION = static_cast<::x86_insn>(insn->id);
-                PREVIOUS_INSTRUCTIONSIZE = insn->size;
             }
         }
         cs_free(insn, 1);
