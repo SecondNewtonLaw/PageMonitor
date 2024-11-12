@@ -263,12 +263,16 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
             return ::x86_insn::X86_INS_INT == insn ||
                    ::x86_insn::X86_INS_INT1 == insn ||
                    ::x86_insn::X86_INS_INT3 == insn ||
-                   ::x86_insn::X86_INS_INTO == insn;
+                   ::x86_insn::X86_INS_INTO == insn ||
+                   ::x86_insn::X86_INS_SYSCALL == insn;
         };
         const auto IsReturn = [](const x86_insn &insn) {
             return ::x86_insn::X86_INS_RET == insn ||
                    ::x86_insn::X86_INS_RETF == insn ||
                    ::x86_insn::X86_INS_RETFQ == insn;
+        };
+        const auto IsCall = [](const x86_insn &insn) {
+            return ::x86_insn::X86_INS_CALL == insn;
         };
         const auto IsJump = [](const x86_insn &insn) {
             return ::x86_insn::X86_INS_JMP == insn ||
@@ -317,25 +321,37 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
                          static_cast<::x86_insn>(insn->id)) && memcmp(
                          reinterpret_cast<void *>(insn->address + insn->size),
                          &interrupt, 1) != 0)
-                    || ModifiesProcessorFlags(PREVIOUS_INSTRUCTION) && IsInterrupt(
+                    || (IsCall(PREVIOUS_INSTRUCTION) || ModifiesProcessorFlags(PREVIOUS_INSTRUCTION)) && IsInterrupt(
                         static_cast<::x86_insn>(insn->id))) {
                     /*
                      *  The next instruction is not an interrupt, the previous instruction was not a jump (Which would denote an end in an execution block)
                      *  - Implementation note:
                      *      - Hyperion appears to be (IN PURPOSE) modifying CPU flags before interrupts, possibly relating to tripping
                      *        their IC and passing the Interrupt and ignoring it if such is the case that the flag is set?
+                     *      - Hyperion appears to sometimes use the INT3 to perform return-based programming, possibly to break analysis (?)
                      */
                     info(
-                        "PATCHED ORPHAN INTERRUPT (POSSIBLY A FAKE INSTRUCTION!) @ %p", startChunk);
+                        "PATCHED ORPHAN INTERRUPT (POSSIBLY A FAKE INSTRUCTION!) @ %p",
+                        reinterpret_cast<void *>(insn->address));
 
                     memset(reinterpret_cast<void *>(insn->address), 0x90, insn->size); // Address is canonical.
 
-                    if (ModifiesProcessorFlags(PREVIOUS_INSTRUCTION) && IsInterrupt(
+                    if (IsCall(PREVIOUS_INSTRUCTION) && IsInterrupt(static_cast<::x86_insn>(insn->id))) {
+                        /*
+                         *  Due to this function likely ending here, we must replace the INT3 with a ret instruction.
+                         */
+                        info(
+                            "PATCHED POSSIBLE INT3-BASED RETURN @ %p", reinterpret_cast<void *>(insn->address));
+                        memset(reinterpret_cast<void *>(insn->address), 0xC3, 1);
+                    }
+
+                    if ((ModifiesProcessorFlags(PREVIOUS_INSTRUCTION)) && IsInterrupt(
                             static_cast<::x86_insn>(insn->id))) {
                         auto addy = insn->address;
                         while (memcmp(reinterpret_cast<void *>(++addy), &interrupt, 1) == 0) {
                             info(
-                                "PATCHED FOLLOWING INTERRUPTS THAT WERE MISLEADING ANALYSIS.");
+                                "PATCHED FOLLOWING INTERRUPTS THAT WERE MISLEADING ANALYSIS @ %p.",
+                                reinterpret_cast<void *>(insn->address));
                             memset(reinterpret_cast<void *>(addy), 0x90, 1);
                         }
                     }
