@@ -90,6 +90,23 @@ bool ResolveSections(_In_ PDUMPER pDumper, const MODULEINFO &moduleinfo, _In_ PB
             continue;
         }
 
+        if (IMAGE_SCN_CNT_CODE & SectionHeader->Characteristics == IMAGE_SCN_CNT_CODE) {
+            warn("Declaring code segment '%s' at 0x%p section as R-X (If not marked already)", SectionHeader->Name,
+                 sectionBaseAddress);
+
+            if ((SectionHeader->Characteristics & IMAGE_SCN_MEM_EXECUTE) != IMAGE_SCN_MEM_EXECUTE) {
+                warn("Declaring segment '%s' at 0x%p section as EXECUTE (Not marked)", SectionHeader->Name,
+                     sectionBaseAddress);
+                SectionHeader->Characteristics |= IMAGE_SCN_MEM_EXECUTE;
+            }
+
+            if ((SectionHeader->Characteristics & IMAGE_SCN_MEM_READ) != IMAGE_SCN_MEM_READ) {
+                warn("Declaring segment '%s' at 0x%p section as READ (Not marked)", SectionHeader->Name,
+                     sectionBaseAddress);
+                SectionHeader->Characteristics |= IMAGE_SCN_MEM_READ;
+            }
+        }
+
         info("Assuming section %s at 0x%p to be ENCRYPTED", SectionHeader->Name, sectionBaseAddress);
 
         EncryptedSections.push_back(sectionInformation);
@@ -135,10 +152,7 @@ bool ResolveSections(_In_ PDUMPER pDumper, const MODULEINFO &moduleinfo, _In_ PB
 _Success_(return)
 
 static BOOL IsExecutableSegment(_In_ PIMAGE_SECTION_HEADER SectionHeader) {
-    //
-    // If the section is named ".text" then it is possibly encrypted.
-    //
-    return IMAGE_SCN_MEM_EXECUTE & SectionHeader->Characteristics;
+    return (IMAGE_SCN_CNT_CODE & SectionHeader->Characteristics) == IMAGE_SCN_CNT_CODE;
 }
 
 
@@ -364,6 +378,8 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
             }
         }
         cs_free(insn, 1);
+    } else {
+        info("section was determined to not be an executable section; skipping patching.");
     }
 
     g_bTerminateCurrentTask = false;

@@ -114,9 +114,6 @@ _cdecl main() {
         return 1;
     }
 
-    //
-    // Create a new dumper object.
-    //
     if (!DumperCreate(&Dumper, wszTargetName, wszTargetModule == nullptr ? L"all" : wszTargetModule, outputPath,
                       fDecryptionFactor,
                       bUseTimeStamp)) {

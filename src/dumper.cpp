@@ -177,7 +177,7 @@ DumperDumpToDisk(_In_ PDUMPER const pDumper) {
     }
 
     while (!futures.empty()) {
-        for (auto start = futures.begin(); start != futures.end();) {
+        for (auto start = futures.begin(); start != futures.end() && !futures.empty();) {
             if (start->wait_for(std::chrono::milliseconds{2000}) == std::future_status::timeout) {
                 ++start;
                 continue;

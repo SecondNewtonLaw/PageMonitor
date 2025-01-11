@@ -33,3 +33,17 @@ vulkan.exe -p <TARGET_PROCESS> -o <OUTPUT_DIRECTORY> --decrypt <TARGET_FACTOR>
 ## Contributing
 
 If you have anything to contribute to this project, please send a pull request, and I will review it. If you want to contribute but are unsure what to do, check out the [issues](https://github.com/atrexus/vulkan/issues) tab for the latest stuff I need help with.
+
+## Changes made after fork
+- Moved code to c++
+- Dynamically patch int3 and other instructions which break analysis on Binary Ninja, as it is my main disassembler
+- Dump all modules in the target process and dump them as if they were encrypted.
+- Sections are copied from the remote process parallely
+
+## Todo
+- When dumping all modules, validate that the BaseAddress is the same as in the current; if so do not dump, as then there would be no changes done to the DLL (Most likely)
+- Port to ImGui
+
+These changes were somewhat lazily done, which makes it have some bugs, however as Atrexus (The original author of Vulkan) has rewritten his project on C++, this project proves to no longer be of use.
+
+Because of it this project is no longer maintained, and I will make a new fork with the changes Atrexus has put forth, however with an ImGui as a front end and perhaps some other feature i may think of later.
