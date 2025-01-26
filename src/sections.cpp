@@ -344,7 +344,7 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
                      *        their IC and passing the Interrupt and ignoring it if such is the case that the flag is set?
                      *      - Hyperion appears to sometimes use the INT3 to perform return-based programming, possibly to break analysis (?)
                      */
-                    info(
+                    debug(
                         "PATCHED ORPHAN INTERRUPT (POSSIBLY A FAKE INSTRUCTION!) @ %p",
                         reinterpret_cast<void *>(insn->address));
 
@@ -354,7 +354,7 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
                         /*
                          *  Due to this function likely ending here, we must replace the INT3 with a ret instruction.
                          */
-                        info(
+                        debug(
                             "PATCHED POSSIBLE INT3-BASED RETURN @ %p", reinterpret_cast<void *>(insn->address));
                         memset(reinterpret_cast<void *>(insn->address), 0xC3, 1);
                     }
@@ -363,7 +363,7 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
                             static_cast<::x86_insn>(insn->id))) {
                         auto addy = insn->address;
                         while (memcmp(reinterpret_cast<void *>(++addy), &interrupt, 1) == 0) {
-                            info(
+                            debug(
                                 "PATCHED FOLLOWING INTERRUPTS THAT WERE MISLEADING ANALYSIS @ %p.",
                                 reinterpret_cast<void *>(insn->address));
                             memset(reinterpret_cast<void *>(addy), 0x90, 1);
