@@ -38,6 +38,7 @@ typedef struct _DUMPER {
     const wchar_t *OutputPath; // Path to the output directory.
     FLOAT DecryptionFactor; // Decrypt no access memory regions.
     BOOL UseTimestamp; // Flag to indicate whether to use timestamp in output filename.
+    BOOL ignoreVmp0Section; // Flag to indicate whether we should ignore .vmp0 section
 } DUMPER, *PDUMPER;
 
 //

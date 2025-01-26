@@ -200,6 +200,13 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
                                               SectionHeader->VirtualAddress + currentPageRva);
             const auto pAlignedBuffer = RVA2VA(PBYTE, ImageBase, SectionHeader->PointerToRawData + currentPageRva);
 
+            if (Dumper->ignoreVmp0Section && lstrcmpA(szSectionName, ".vmp0") == 0) {
+                debug("Skipping page 0x%p due to being .vmp0 which slows down analysis. (Can be disabled in options)");
+                memset(pAlignedBuffer, 0xCC, PAGE_SIZE);
+                ++start;
+                continue;
+            }
+
             // Query mem info.
             if (!VirtualQueryEx(Dumper->hProcess, rpBaseAddress, &MemoryInfo, sizeof(MemoryInfo)))
                 continue;

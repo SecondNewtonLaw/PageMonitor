@@ -47,6 +47,7 @@ _cdecl main() {
     int nArgs{};
     const wchar_t *wszTargetModule = nullptr;
     DUMPER Dumper{};
+    Dumper.ignoreVmp0Section = TRUE;
 
     wchar_t * *szArglist = CommandLineToArgvW(GetCommandLineW(), &nArgs);
 
@@ -93,6 +94,13 @@ _cdecl main() {
             bIsDebugMode = TRUE;
         } else if (lstrcmpW(szArglist[i], L"-t") == 0) {
             bUseTimeStamp = TRUE;
+        } else if (lstrcmpW(szArglist[i], L"-ignore-vmp")) {
+            const auto providedValue = szArglist[i + 1];
+            if (lstrcmpiW(providedValue, L"y") == 0) {
+                Dumper.ignoreVmp0Section = TRUE;
+            } else if (lstrcmpiW(providedValue, L"n") == 0) {
+                Dumper.ignoreVmp0Section = FALSE;
+            }
         } else {
             error("Unknown option: %ws", szArglist[i]);
             Usage();
@@ -138,6 +146,7 @@ Usage() {
     fprintf(stdout, "Usage: dumper [options] <pid>\n");
     fprintf(stdout, "Options:\n");
     fprintf(stdout, "  -p <name>            The name of the target process to dump.\n");
+    fprintf(stdout, "  -ignore-vmp y/n      Determines if we should ignore .vmp0 section. (Defaults to yes)\n");
     fprintf(stdout, "  -o <path>            The output directory where the dump will be saved (default: \".\").\n");
     fprintf(
         stdout,
