@@ -126,6 +126,13 @@ _Success_(return) bool DumperCreate(
             GetRemoteProcessModuleNames(pDumper->hProcess, names);
 
             for (const auto &name: names) {
+                const bool alreadyExists = std::ranges::any_of(pDumper->DumpTargets,
+                                                  [&name](const DumpTarget &item) {
+                                                      return lstrcmpW(item.wszModuleName, name) == 0;
+                                                  });
+                if (alreadyExists)
+                    continue;
+
                 MODULEINFO moduleInfo{};
                 GetModuleInfo(pDumper->hProcess, name, &moduleInfo);
 
