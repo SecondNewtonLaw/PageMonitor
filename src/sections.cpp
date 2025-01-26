@@ -257,7 +257,7 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
     }
 
     if (IsExecutableSegment(SectionHeader)) {
-        info("cleaning up executable section");
+        info("Patching int3 instructions that break analysis...");
 
         const auto ModifiesProcessorFlags = [](const x86_insn &insn) {
             return ::x86_insn::X86_INS_TEST == insn ||
@@ -379,7 +379,7 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
         }
         cs_free(insn, 1);
     } else {
-        info("section was determined to not be an executable section; skipping patching.");
+        info("section was determined to not be an executable section; skipping patching int3.");
     }
 
     g_bTerminateCurrentTask = false;
