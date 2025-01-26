@@ -201,7 +201,8 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
             const auto pAlignedBuffer = RVA2VA(PBYTE, ImageBase, SectionHeader->PointerToRawData + currentPageRva);
 
             if (Dumper->ignoreVmp0Section && lstrcmpA(szSectionName, ".vmp0") == 0) {
-                debug("Skipping page 0x%p due to being .vmp0 which slows down analysis. (Can be disabled in options)", rpBaseAddress);
+                debug("Skipping page 0x%p due to being .vmp0 which slows down analysis. (Can be disabled in options)",
+                      rpBaseAddress);
                 memset(pAlignedBuffer, 0xCC, PAGE_SIZE);
                 ++start;
                 continue;
@@ -263,7 +264,7 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
         _mm_pause(); // Rest up CPU (:pray:)
     }
 
-    if (IsExecutableSegment(SectionHeader)) {
+    if (IsExecutableSegment(SectionHeader) && !(Dumper->ignoreVmp0Section && lstrcmpA(szSectionName, ".vmp0") == 0)) {
         info("Patching int3 instructions that break analysis...");
 
         const auto ModifiesProcessorFlags = [](const x86_insn &insn) {
@@ -389,6 +390,6 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
         info("section was determined to not be an executable section; skipping patching int3.");
     }
 
-    g_bTerminateCurrentTask = false;
+    //g_bTerminateCurrentTask = false; We want to stop but once we terminate one task we will not want to stop? Which idiot wrote this code
     return true;
 }
