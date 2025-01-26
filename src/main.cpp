@@ -114,7 +114,7 @@ _cdecl main() {
         return 1;
     }
 
-    if (!DumperCreate(&Dumper, wszTargetName, wszTargetModule == nullptr ? L"all" : wszTargetModule, outputPath,
+    if (!DumperCreate(&Dumper, wszTargetName, wszTargetModule == nullptr ? L"main_image" : wszTargetModule, outputPath,
                       fDecryptionFactor,
                       bUseTimeStamp)) {
         return EXIT_FAILURE;
@@ -141,7 +141,7 @@ Usage() {
     fprintf(stdout, "  -o <path>            The output directory where the dump will be saved (default: \".\").\n");
     fprintf(
         stdout,
-        "  -M <module name>     The name of the target module that has to be dumped from the target process (defaults to the PE Image if not declared).\n");
+        "  -M <module name>     The name of the target module that has to be dumped from the target process or all to dump all modules and PE Image (defaults to the PE Image if not declared).\n");
 
     fprintf(stdout, "  -t                   Include a timestamp in the filename (e.g., program_2024-09-08.exe).\n");
     fprintf(

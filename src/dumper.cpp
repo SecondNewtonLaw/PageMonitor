@@ -52,8 +52,11 @@ _Success_(return) bool DumperCreate(
     cs_option(pDumper->capstoneHandle, CS_OPT_SKIPDATA, CS_OPT_ON);
     pDumper->ProcessName = szProcessName;
 
-    if (lstrcmpW(wszTargetModule, L"all") != 0)
+    if (lstrcmpW(wszTargetModule, L"main_image") == 0) {
+        pDumper->DumpTargets.push_back(DumpTarget{nullptr, nullptr, 0, szProcessName});
+    } else if (lstrcmpW(wszTargetModule, L"all") != 0) {
         pDumper->DumpTargets.push_back(DumpTarget{nullptr, nullptr, 0, wszTargetModule});
+    }
 
     pDumper->OutputPath = szOutputPath;
     pDumper->DecryptionFactor = fDecryptionFactor;
