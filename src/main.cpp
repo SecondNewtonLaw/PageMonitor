@@ -47,6 +47,7 @@ _cdecl main() {
     int nArgs{};
     const wchar_t *wszTargetModule = nullptr;
     DUMPER Dumper{};
+    Dumper.ignoreVmp0Section = TRUE;
 
     wchar_t * *szArglist = CommandLineToArgvW(GetCommandLineW(), &nArgs);
 
@@ -64,6 +65,9 @@ _cdecl main() {
     const wchar_t *outputPath = const_cast<wchar_t *>(L"./dump_out");
 
     for (int i = 1; i < nArgs; i++) {
+        if (wcsstr(szArglist[i], L"-") == nullptr)
+            continue;
+
         if (lstrcmpW(szArglist[i], L"--decrypt") == 0) {
             CHECK_ARGUMENTS();
 
@@ -93,6 +97,13 @@ _cdecl main() {
             bIsDebugMode = TRUE;
         } else if (lstrcmpW(szArglist[i], L"-t") == 0) {
             bUseTimeStamp = TRUE;
+        } else if (lstrcmpW(szArglist[i], L"--ignore-vmp") == 0) {
+            const auto providedValue = szArglist[i + 1];
+            if (lstrcmpiW(providedValue, L"y") == 0) {
+                Dumper.ignoreVmp0Section = TRUE;
+            } else if (lstrcmpiW(providedValue, L"n") == 0) {
+                Dumper.ignoreVmp0Section = FALSE;
+            }
         } else {
             error("Unknown option: %ws", szArglist[i]);
             Usage();
@@ -114,7 +125,7 @@ _cdecl main() {
         return 1;
     }
 
-    if (!DumperCreate(&Dumper, wszTargetName, wszTargetModule == nullptr ? L"all" : wszTargetModule, outputPath,
+    if (!DumperCreate(&Dumper, wszTargetName, wszTargetModule == nullptr ? L"main_image" : wszTargetModule, outputPath,
                       fDecryptionFactor,
                       bUseTimeStamp)) {
         return EXIT_FAILURE;
@@ -138,10 +149,11 @@ Usage() {
     fprintf(stdout, "Usage: dumper [options] <pid>\n");
     fprintf(stdout, "Options:\n");
     fprintf(stdout, "  -p <name>            The name of the target process to dump.\n");
+    fprintf(stdout, "  --ignore-vmp y/n      Determines if we should ignore .vmp0 section. (Defaults to yes)\n");
     fprintf(stdout, "  -o <path>            The output directory where the dump will be saved (default: \".\").\n");
     fprintf(
         stdout,
-        "  -M <module name>     The name of the target module that has to be dumped from the target process (defaults to the PE Image if not declared).\n");
+        "  -M <module name>     The name of the target module that has to be dumped from the target process or all to dump all modules and PE Image (defaults to the PE Image if not declared).\n");
 
     fprintf(stdout, "  -t                   Include a timestamp in the filename (e.g., program_2024-09-08.exe).\n");
     fprintf(

@@ -200,6 +200,14 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
                                               SectionHeader->VirtualAddress + currentPageRva);
             const auto pAlignedBuffer = RVA2VA(PBYTE, ImageBase, SectionHeader->PointerToRawData + currentPageRva);
 
+            if (Dumper->ignoreVmp0Section && lstrcmpA(szSectionName, ".vmp0") == 0) {
+                debug("Skipping page 0x%p due to being .vmp0 which slows down analysis. (Can be disabled in options)",
+                      rpBaseAddress);
+                memset(pAlignedBuffer, 0xCC, PAGE_SIZE);
+                ++start;
+                continue;
+            }
+
             // Query mem info.
             if (!VirtualQueryEx(Dumper->hProcess, rpBaseAddress, &MemoryInfo, sizeof(MemoryInfo)))
                 continue;
@@ -256,8 +264,8 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
         _mm_pause(); // Rest up CPU (:pray:)
     }
 
-    if (IsExecutableSegment(SectionHeader)) {
-        info("cleaning up executable section");
+    if (IsExecutableSegment(SectionHeader) && !(Dumper->ignoreVmp0Section && lstrcmpA(szSectionName, ".vmp0") == 0)) {
+        info("Patching int3 instructions that break analysis...");
 
         const auto ModifiesProcessorFlags = [](const x86_insn &insn) {
             return ::x86_insn::X86_INS_TEST == insn ||
@@ -344,7 +352,7 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
                      *        their IC and passing the Interrupt and ignoring it if such is the case that the flag is set?
                      *      - Hyperion appears to sometimes use the INT3 to perform return-based programming, possibly to break analysis (?)
                      */
-                    info(
+                    debug(
                         "PATCHED ORPHAN INTERRUPT (POSSIBLY A FAKE INSTRUCTION!) @ %p",
                         reinterpret_cast<void *>(insn->address));
 
@@ -354,7 +362,7 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
                         /*
                          *  Due to this function likely ending here, we must replace the INT3 with a ret instruction.
                          */
-                        info(
+                        debug(
                             "PATCHED POSSIBLE INT3-BASED RETURN @ %p", reinterpret_cast<void *>(insn->address));
                         memset(reinterpret_cast<void *>(insn->address), 0xC3, 1);
                     }
@@ -363,7 +371,7 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
                             static_cast<::x86_insn>(insn->id))) {
                         auto addy = insn->address;
                         while (memcmp(reinterpret_cast<void *>(++addy), &interrupt, 1) == 0) {
-                            info(
+                            debug(
                                 "PATCHED FOLLOWING INTERRUPTS THAT WERE MISLEADING ANALYSIS @ %p.",
                                 reinterpret_cast<void *>(insn->address));
                             memset(reinterpret_cast<void *>(addy), 0x90, 1);
@@ -379,9 +387,9 @@ DecryptSection(_In_ PDUMPER Dumper, const MODULEINFO &moduleinfo, _In_ PIMAGE_SE
         }
         cs_free(insn, 1);
     } else {
-        info("section was determined to not be an executable section; skipping patching.");
+        info("section was determined to not be an executable section; skipping patching int3.");
     }
 
-    g_bTerminateCurrentTask = false;
+    //g_bTerminateCurrentTask = false; We want to stop but once we terminate one task we will not want to stop? Which idiot wrote this code
     return true;
 }
