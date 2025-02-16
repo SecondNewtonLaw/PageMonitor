@@ -52,8 +52,11 @@ _Success_(return) bool DumperCreate(
     cs_option(pDumper->capstoneHandle, CS_OPT_SKIPDATA, CS_OPT_ON);
     pDumper->ProcessName = szProcessName;
 
-    if (lstrcmpW(wszTargetModule, L"all") != 0)
+    if (lstrcmpW(wszTargetModule, L"main_image") == 0) {
+        pDumper->DumpTargets.push_back(DumpTarget{nullptr, nullptr, 0, szProcessName});
+    } else if (lstrcmpW(wszTargetModule, L"all") != 0) {
         pDumper->DumpTargets.push_back(DumpTarget{nullptr, nullptr, 0, wszTargetModule});
+    }
 
     pDumper->OutputPath = szOutputPath;
     pDumper->DecryptionFactor = fDecryptionFactor;
@@ -119,13 +122,22 @@ _Success_(return) bool DumperCreate(
 
         pDumper->ModuleInformations = std::move(moduleinfos);
 
-        GetRemoteProcessModuleNames(pDumper->hProcess, names);
+        if (lstrcmpW(wszTargetModule, L"all") == 0) {
+            GetRemoteProcessModuleNames(pDumper->hProcess, names);
 
-        for (const auto &name: names) {
-            MODULEINFO moduleInfo{};
-            GetModuleInfo(pDumper->hProcess, name, &moduleInfo);
+            for (const auto &name: names) {
+                const bool alreadyExists = std::ranges::any_of(pDumper->DumpTargets,
+                                                  [&name](const DumpTarget &item) {
+                                                      return lstrcmpW(item.wszModuleName, name) == 0;
+                                                  });
+                if (alreadyExists)
+                    continue;
 
-            pDumper->DumpTargets.push_back(DumpTarget{moduleInfo.lpBaseOfDll, nullptr, 0, name});
+                MODULEINFO moduleInfo{};
+                GetModuleInfo(pDumper->hProcess, name, &moduleInfo);
+
+                pDumper->DumpTargets.push_back(DumpTarget{moduleInfo.lpBaseOfDll, nullptr, 0, name});
+            }
         }
     }
 
